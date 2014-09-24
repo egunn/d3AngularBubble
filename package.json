@@ -1,0 +1,6 @@
+{
+  "name": "d3AngularIntegration",
+  "dependencies": {
+    "express": "^4.9.4"
+  }
+}
