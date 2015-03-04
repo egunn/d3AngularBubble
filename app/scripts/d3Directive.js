@@ -34,8 +34,20 @@
         var arc = d3.svg.arc()
             .startAngle(function(d) { return d.x; })
             .endAngle(function(d) { return d.x + d.dx - .01 / (d.depth + .5); })
-            .innerRadius(function(d) { return radius / 3 * d.depth; })
-            .outerRadius(function(d) { return radius / 3 * (d.depth + 1) - 1; });
+            .innerRadius(function(d) { 
+              if(d.depth > 1){
+                return radius / 2.5 * d.depth; 
+              } else {
+                return 0;
+              }
+            })
+            .outerRadius(function(d) { 
+              if(d.depth > 1){
+                return radius / 3 * (d.depth + 1) - 1; 
+              } else {
+                return radius / 2.50 * (d.depth + 1) - 1; 
+              }
+            });
 
         d3.json("/data.json", function(error, root) {
 
@@ -58,8 +70,9 @@
               .value(function(d) { return d.sum; });
 
           var center = svg.append("circle")
-              .attr("r", radius / 3)
-              .on("click", zoomOut);
+              .attr("r", 0)
+              // .on("click", zoomOut);
+
 
           center.append("title")
               .text("zoom out");
@@ -70,68 +83,68 @@
               .attr("d", arc)
               .style("fill", function(d) { return d.fill; })
               .each(function(d) { this._current = updateArc(d); })
-              .on("click", zoomIn);
+              // .on("click", zoomIn);
 
-          function zoomIn(p) {
-            if (p.depth > 1) p = p.parent;
-            if (!p.children) return;
-            zoom(p, p);
-          }
+          // function zoomIn(p) {
+          //   if (p.depth > 1) p = p.parent;
+          //   if (!p.children) return;
+          //   zoom(p, p);
+          // }
 
-          function zoomOut(p) {
-            if (!p.parent) return;
-            zoom(p.parent, p);
-          }
+          // function zoomOut(p) {
+          //   if (!p.parent) return;
+          //   zoom(p.parent, p);
+          // }
 
           // Zoom to the specified new root.
-          function zoom(root, p) {
-            if (document.documentElement.__transition__) return;
+          // function zoom(root, p) {
+          //   if (document.documentElement.__transition__) return;
 
-            // Rescale outside angles to match the new layout.
-            var enterArc,
-                exitArc,
-                outsideAngle = d3.scale.linear().domain([0, 2 * Math.PI]);
+          //   // Rescale outside angles to match the new layout.
+          //   var enterArc,
+          //       exitArc,
+          //       outsideAngle = d3.scale.linear().domain([0, 2 * Math.PI]);
 
-            function insideArc(d) {
-              return p.key > d.key
-                  ? {depth: d.depth - 1, x: 0, dx: 0} : p.key < d.key
-                  ? {depth: d.depth - 1, x: 2 * Math.PI, dx: 0}
-                  : {depth: 0, x: 0, dx: 2 * Math.PI};
-            }
+          //   function insideArc(d) {
+          //     return p.key > d.key
+          //         ? {depth: d.depth - 1, x: 0, dx: 0} : p.key < d.key
+          //         ? {depth: d.depth - 1, x: 2 * Math.PI, dx: 0}
+          //         : {depth: 0, x: 0, dx: 2 * Math.PI};
+          //   }
 
-            function outsideArc(d) {
-              return {depth: d.depth + 1, x: outsideAngle(d.x), dx: outsideAngle(d.x + d.dx) - outsideAngle(d.x)};
-            }
+          //   function outsideArc(d) {
+          //     return {depth: d.depth + 1, x: outsideAngle(d.x), dx: outsideAngle(d.x + d.dx) - outsideAngle(d.x)};
+          //   }
 
-            center.datum(root);
+          //   center.datum(root);
 
-            // When zooming in, arcs enter from the outside and exit to the inside.
-            // Entering outside arcs start from the old layout.
-            if (root === p) enterArc = outsideArc, exitArc = insideArc, outsideAngle.range([p.x, p.x + p.dx]);
+          //   // When zooming in, arcs enter from the outside and exit to the inside.
+          //   // Entering outside arcs start from the old layout.
+          //   if (root === p) enterArc = outsideArc, exitArc = insideArc, outsideAngle.range([p.x, p.x + p.dx]);
 
-            path = path.data(partition.nodes(root).slice(1), function(d) { return d.key; });
+          //   path = path.data(partition.nodes(root).slice(1), function(d) { return d.key; });
 
-            // When zooming out, arcs enter from the inside and exit to the outside.
-            // Exiting outside arcs transition to the new layout.
-            if (root !== p) enterArc = insideArc, exitArc = outsideArc, outsideAngle.range([p.x, p.x + p.dx]);
+          //   // When zooming out, arcs enter from the inside and exit to the outside.
+          //   // Exiting outside arcs transition to the new layout.
+          //   if (root !== p) enterArc = insideArc, exitArc = outsideArc, outsideAngle.range([p.x, p.x + p.dx]);
 
-            d3.transition().duration(d3.event.altKey ? 7500 : 750).each(function() {
-              path.exit().transition()
-                  .style("fill-opacity", function(d) { return d.depth === 1 + (root === p) ? 1 : 0; })
-                  .attrTween("d", function(d) { return arcTween.call(this, exitArc(d)); })
-                  .remove();
+          //   d3.transition().duration(d3.event.altKey ? 7500 : 750).each(function() {
+          //     path.exit().transition()
+          //         .style("fill-opacity", function(d) { return d.depth === 1 + (root === p) ? 1 : 0; })
+          //         .attrTween("d", function(d) { return arcTween.call(this, exitArc(d)); })
+          //         .remove();
 
-              path.enter().append("path")
-                  .style("fill-opacity", function(d) { return d.depth === 2 - (root === p) ? 1 : 0; })
-                  .style("fill", function(d) { return d.fill; })
-                  .on("click", zoomIn)
-                  .each(function(d) { this._current = enterArc(d); });
+          //     path.enter().append("path")
+          //         .style("fill-opacity", function(d) { return d.depth === 2 - (root === p) ? 1 : 0; })
+          //         .style("fill", function(d) { return d.fill; })
+          //         .on("click", zoomIn)
+          //         .each(function(d) { this._current = enterArc(d); });
 
-              path.transition()
-                  .style("fill-opacity", 1)
-                  .attrTween("d", function(d) { return arcTween.call(this, updateArc(d)); });
-            });
-          }
+          //     path.transition()
+          //         .style("fill-opacity", 1)
+          //         .attrTween("d", function(d) { return arcTween.call(this, updateArc(d)); });
+          //   });
+          // }
         });
 
         function key(d) {
