@@ -78,7 +78,29 @@
                     .data(partition.nodes(root).slice(1))
                   .enter().append("path")
                     .attr("d", arc)
-                    .style("fill", function(d) { return d.fill; })
+                    .style("fill", function(d) { 
+                      if(d.parent.name === "email"){
+                        return '#bbdd73'; 
+                      } else if(d.parent.name === "google"){
+                        return '#e46f61'; 
+                      } else if(d.parent.name === "youtube"){
+                        return '#d86d25'; 
+                      } else if(d.parent.name === "twitter"){
+                        return '#33bdf1'; 
+                      } else if(d.parent.name === "facebook"){
+                        return '#627aad'; 
+                      } else if(d.name === "google"){
+                        return '#dd4b39'; 
+                      } else if(d.name === "youtube"){
+                        return '#e08a51'; 
+                      } else if(d.name === "twitter"){
+                        return '#00aced'; 
+                      } else if(d.name === "facebook"){
+                        return '#3b5998'; 
+                      } else if(d.name === "email"){
+                        return '#aad450'; 
+                      }
+                    })
                     .each(function(d) { this._current = updateArc(d); })
                     .on("click", zoomIn);
             // Now redefine the value function to use the previously-computed sum.
@@ -94,30 +116,22 @@
             function zoom(root, p) {
                 if (document.documentElement.__transition__) return;
 
-                // Rescale outside angles to match the new layout.
-                // var enterArc,
-                //     exitArc,
-                //     outsideAngle = d3.scale.linear().domain([0, 2 * Math.PI]);
-
-                // function insideArc(d) {
-                //   return p.key > d.key
-                //       ? {depth: d.depth - 1, x: 0, dx: 0} : p.key < d.key
-                //       ? {depth: d.depth - 1, x: 2 * Math.PI, dx: 0}
-                //       : {depth: 0, x: 0, dx: 2 * Math.PI};
-                // }
-
-                // function outsideArc(d) {
-                //   return {depth: d.depth + 1, x: outsideAngle(d.x), dx: outsideAngle(d.x + d.dx) - outsideAngle(d.x)};
-                // }
-
                 center.datum(root);
 
-                // When zooming in, arcs enter from the outside and exit to the inside.
-                // Entering outside arcs start from the old layout.
-                // if (root === p) enterArc = outsideArc, exitArc = insideArc, outsideAngle.range([p.x, p.x + p.dx]);
-
                 partition
-                    .value(function(d) { return d.size + 2000; })
+                    .value(function(d) { 
+                      if(d.parent.name === "email"){
+                        return d.size + 2000; 
+                      } else if(d.parent.name === "google"){
+                        return d.size - 500;
+                      } else if(d.parent.name === "youtube"){
+                        return d.size - 500;
+                      } else if(d.parent.name === "twitter"){
+                        return d.size + 1350;
+                      } else if(d.parent.name === "facebook"){
+                        return d.size - 500;
+                      }
+                    })
                     .nodes(root)
                     .forEach(function(d) {
                       d._children = d.children;
@@ -128,15 +142,7 @@
 
                 path = path.data(partition.nodes(root).slice(1), function(d) { return d.key; });
 
-                // When zooming out, arcs enter from the inside and exit to the outside.
-                // Exiting outside arcs transition to the new layout.
-                // if (root !== p) enterArc = insideArc, exitArc = outsideArc, outsideAngle.range([p.x, p.x + p.dx]);
-
                 d3.transition().duration(d3.event.altKey ? 7500 : 750).each(function() {
-                  // path.exit().transition()
-                  //     .style("fill-opacity", function(d) { return d.depth === 1 + (root === p) ? 1 : 0; })
-                  //     .attrTween("d", function(d) { return arcTween.call(this, exitArc(d)); })
-                  //     .remove();
 
                   path.enter().append("path")
                       .style("fill-opacity", function(d) { return d.depth === 2 - (root === p) ? 1 : 0; })
