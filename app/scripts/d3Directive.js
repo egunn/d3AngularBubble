@@ -79,26 +79,26 @@
                   .enter().append("path")
                     .attr("d", arc)
                     .style("fill", function(d) { 
-                      if(d.parent.name === "email"){
-                        return '#bbdd73'; 
-                      } else if(d.parent.name === "google"){
-                        return '#e46f61'; 
-                      } else if(d.parent.name === "youtube"){
-                        return '#d86d25'; 
-                      } else if(d.parent.name === "twitter"){
-                        return '#33bdf1'; 
-                      } else if(d.parent.name === "facebook"){
-                        return '#627aad'; 
+                      if(d.name === "email"){
+                        return '#aad450'; 
                       } else if(d.name === "google"){
                         return '#dd4b39'; 
                       } else if(d.name === "youtube"){
-                        return '#e08a51'; 
+                        return '#d86d25'; 
                       } else if(d.name === "twitter"){
                         return '#00aced'; 
                       } else if(d.name === "facebook"){
                         return '#3b5998'; 
-                      } else if(d.name === "email"){
-                        return '#aad450'; 
+                      } else if(d.parent.name === "google"){
+                        return '#e46f61'; 
+                      } else if(d.parent.name === "youtube"){
+                        return '#e08a51'; 
+                      } else if(d.parent.name === "twitter"){
+                        return '#33bdf1'; 
+                      } else if(d.parent.name === "facebook"){
+                        return '#627aad'; 
+                      } else if(d.parent.name === "email"){
+                        return '#bbdd73'; 
                       }
                     })
                     .each(function(d) { this._current = updateArc(d); })
@@ -121,15 +121,26 @@
                 partition
                     .value(function(d) { 
                       if(d.parent.name === "email"){
-                        return d.size + 2000; 
+                        d.size += 2000;
+                        return d.size; 
                       } else if(d.parent.name === "google"){
-                        return d.size - 500;
+                        if(d.size - 500 > 0){
+                          d.size -= 500;
+                        }
+                        return d.size;
                       } else if(d.parent.name === "youtube"){
-                        return d.size - 500;
+                        if(d.size - 500 > 0){
+                          d.size -= 500;
+                        }
+                        return d.size;
                       } else if(d.parent.name === "twitter"){
-                        return d.size + 1350;
+                        d.size += 1350;
+                        return d.size;
                       } else if(d.parent.name === "facebook"){
-                        return d.size - 500;
+                        if(d.size - 500 > 0){
+                          d.size -= 500;
+                        }
+                        return d.size;
                       }
                     })
                     .nodes(root)
