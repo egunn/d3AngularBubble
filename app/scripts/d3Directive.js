@@ -11,179 +11,470 @@
         onClick: "&"
       },
       link: function(scope, iElement, iAttrs) {
-        var svg = d3.select(iElement[0])
-            .append("svg")
-            .attr("width", "100%")
-            .attr('height', 450)
+        var margin = {top: 350, right: 480, bottom: 350, left: 480},
+            radius = Math.min(margin.top, margin.right, margin.bottom, margin.left) - 10;
 
-        // on window resize, re-render d3 canvas
-        window.onresize = function() {
-          return scope.$apply();
-        };
-        scope.$watch(function(){
-            return angular.element(window)[0].innerWidth;
-          }, function(){
-            return scope.render(scope.data);
-          }
-        );
+        var hue = d3.scale.category10();
 
-        // watch for data changes and re-render
-        scope.$watch('data', function(newVals, oldVals) {
-          return scope.render(newVals);
-        }, true);
+        var luminance = d3.scale.sqrt()
+            .domain([0, 1e6])
+            .clamp(true)
+            .range([90, 20]);
 
-        // define render function
-        scope.render = function(data){
-          // remove all previous items before render
-          svg.selectAll("*").remove();
-          // setup variables
+        var svg = d3.select("body").append("svg")
+            .attr("width", margin.left + margin.right)
+            .attr("height", margin.top + margin.bottom)
+          .append("g")
+            .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
 
-          var width = 600,
-              height = 400,
-              padding = 1.5, // separation between same-color nodes
-              clusterPadding = 6, // separation between different-color nodes
-              maxRadius = 12;
+        var partition = d3.layout.partition()
+            .sort(function(a, b) { return d3.ascending(a.name, b.name); })
+            .size([2 * Math.PI, radius]);
 
-          var m = 5; // number of distinct clusters
+        var arc = d3.svg.arc()
+            .startAngle(function(d) { return d.x; })
+            .endAngle(function(d) { return d.x + d.dx - .01 / (d.depth + .5); })
+            .innerRadius(function(d) { return radius / 3 * d.depth; })
+            .outerRadius(function(d) { return radius / 3 * (d.depth + 1) - 1; });
 
-          var color = d3.scale.category10()
-              .domain(d3.range(m));
+        d3.json("/data.json", function(error, root) {
 
-          // The largest node for each cluster.
-          var clusters = new Array(m);
-          console.log(data);
-          var nodes = data.map(function(data) {
-            var i = Math.floor(Math.random() * m),
-              r = data.score * 1, 
-              d = {
-                cluster: i,
-                radius: r,
-                x: (function(){
-                  return Math.cos(i / m * 2 * Math.PI) * 200 + width / 2 + Math.random()
-                })(),
-                y: (function(){
-                  return Math.sin(i / m * 2 * Math.PI) * 200 + height / 2 + Math.random()
-                })(),
-                name: data.name,
-                score: (function(){
-                  return data.score;
-                })(),
-                theaters: (function(){
-                  return data.theaters
-                })()
-              }
-            if (!clusters[i] || (r > clusters[i].radius)) clusters[i] = d;
-            return d;
-          })
-
-          var force = d3.layout.force()
-              .nodes(nodes)
-              .size([width, height])
-              .gravity(.02)
-              .charge(0)
-              .on("tick", tick)
-              .start();
-
-          var node = svg.selectAll("circle")
-              .data(nodes)
-            .enter().append("circle")
-              .style("fill", function(d) { return color(d.cluster); })
-              .call(force.drag)
-              .on("mouseover", function(d, i){
-                // console.log(d.name);
-              })
-              .on("mouseover", mouseover)
-              .on("mousemove", function(d){
-                mousemove(d);
-              })
-              .on("mouseout", mouseout)
-
-          var div = d3.select("body").append("div")
-              .attr("class", "tooltip")
-              .style("opacity", 1);
-
-          function mouseover() {
-            div.transition()
-                .duration(500)
-                .style("opacity", 1);
-          }
-
-          function mousemove(d) {
-            div
-                .text(d.name)
-                .style("left", (d3.event.pageX - 50) + "px")
-                .style("top", (d3.event.pageY - 50) + "px");
-          }
-
-          function mouseout() {
-            div.transition()
-                .duration(500)
-                .style("opacity", 0);
-          }
-
-          node.transition()
-              .duration(750)
-              .delay(function(d, i) { return i * 5; })
-              .attrTween("r", function(d) {
-                var i = d3.interpolate(0, d.radius);
-                return function(t) { return d.radius = i(t); };
+          // Compute the initial layout on the entire tree to sum sizes.
+          // Also compute the full name and fill color for each node,
+          // and stash the children so they can be restored as we descend.
+          partition
+              .value(function(d) { return d.size; })
+              .nodes(root)
+              .forEach(function(d) {
+                d._children = d.children;
+                d.sum = d.value;
+                d.key = key(d);
+                d.fill = fill(d);
               });
 
-          function tick(e) {
-            node
-                .each(cluster(10 * e.alpha * e.alpha))
-                .each(collide(.5))
-                .attr("cx", function(d) { return d.x; })
-                .attr("cy", function(d) { return d.y; });
+          // Now redefine the value function to use the previously-computed sum.
+          partition
+              .children(function(d, depth) { return depth < 2 ? d._children : null; })
+              .value(function(d) { return d.sum; });
+
+          var center = svg.append("circle")
+              .attr("r", radius / 3)
+              .on("click", zoomOut);
+
+          center.append("title")
+              .text("zoom out");
+
+          var path = svg.selectAll("path")
+              .data(partition.nodes(root).slice(1))
+            .enter().append("path")
+              .attr("d", arc)
+              .style("fill", function(d) { return d.fill; })
+              .each(function(d) { this._current = updateArc(d); })
+              .on("click", zoomIn);
+
+          function zoomIn(p) {
+            if (p.depth > 1) p = p.parent;
+            if (!p.children) return;
+            zoom(p, p);
           }
 
-          // Move d to be adjacent to the cluster node.
-          function cluster(alpha) {
-            return function(d) {
-              var cluster = clusters[d.cluster];
-              if (cluster === d) return;
-              var x = d.x - cluster.x,
-                  y = d.y - cluster.y,
-                  l = Math.sqrt(x * x + y * y),
-                  r = d.radius + cluster.radius;
-              if (l != r) {
-                l = (l - r) / l * alpha;
-                d.x -= x *= l;
-                d.y -= y *= l;
-                cluster.x += x;
-                cluster.y += y;
-              }
-            };
+          function zoomOut(p) {
+            if (!p.parent) return;
+            zoom(p.parent, p);
           }
 
-          // Resolves collisions between d and all other circles.
-          function collide(alpha) {
-            var quadtree = d3.geom.quadtree(nodes);
-            return function(d) {
-              var r = d.radius + maxRadius + Math.max(padding, clusterPadding),
-                  nx1 = d.x - r,
-                  nx2 = d.x + r,
-                  ny1 = d.y - r,
-                  ny2 = d.y + r;
-              quadtree.visit(function(quad, x1, y1, x2, y2) {
-                if (quad.point && (quad.point !== d)) {
-                  var x = d.x - quad.point.x,
-                      y = d.y - quad.point.y,
-                      l = Math.sqrt(x * x + y * y),
-                      r = d.radius + quad.point.radius + (d.cluster === quad.point.cluster ? padding : clusterPadding);
-                  if (l < r) {
-                    l = (l - r) / l * alpha;
-                    d.x -= x *= l;
-                    d.y -= y *= l;
-                    quad.point.x += x;
-                    quad.point.y += y;
-                  }
-                }
-                return x1 > nx2 || x2 < nx1 || y1 > ny2 || y2 < ny1;
-              });
-            };
+          // Zoom to the specified new root.
+          function zoom(root, p) {
+            if (document.documentElement.__transition__) return;
+
+            // Rescale outside angles to match the new layout.
+            var enterArc,
+                exitArc,
+                outsideAngle = d3.scale.linear().domain([0, 2 * Math.PI]);
+
+            function insideArc(d) {
+              return p.key > d.key
+                  ? {depth: d.depth - 1, x: 0, dx: 0} : p.key < d.key
+                  ? {depth: d.depth - 1, x: 2 * Math.PI, dx: 0}
+                  : {depth: 0, x: 0, dx: 2 * Math.PI};
+            }
+
+            function outsideArc(d) {
+              return {depth: d.depth + 1, x: outsideAngle(d.x), dx: outsideAngle(d.x + d.dx) - outsideAngle(d.x)};
+            }
+
+            center.datum(root);
+
+            // When zooming in, arcs enter from the outside and exit to the inside.
+            // Entering outside arcs start from the old layout.
+            if (root === p) enterArc = outsideArc, exitArc = insideArc, outsideAngle.range([p.x, p.x + p.dx]);
+
+            path = path.data(partition.nodes(root).slice(1), function(d) { return d.key; });
+
+            // When zooming out, arcs enter from the inside and exit to the outside.
+            // Exiting outside arcs transition to the new layout.
+            if (root !== p) enterArc = insideArc, exitArc = outsideArc, outsideAngle.range([p.x, p.x + p.dx]);
+
+            d3.transition().duration(d3.event.altKey ? 7500 : 750).each(function() {
+              path.exit().transition()
+                  .style("fill-opacity", function(d) { return d.depth === 1 + (root === p) ? 1 : 0; })
+                  .attrTween("d", function(d) { return arcTween.call(this, exitArc(d)); })
+                  .remove();
+
+              path.enter().append("path")
+                  .style("fill-opacity", function(d) { return d.depth === 2 - (root === p) ? 1 : 0; })
+                  .style("fill", function(d) { return d.fill; })
+                  .on("click", zoomIn)
+                  .each(function(d) { this._current = enterArc(d); });
+
+              path.transition()
+                  .style("fill-opacity", 1)
+                  .attrTween("d", function(d) { return arcTween.call(this, updateArc(d)); });
+            });
           }
-        };
+        });
+
+        function key(d) {
+          var k = [], p = d;
+          while (p.depth) k.push(p.name), p = p.parent;
+          return k.reverse().join(".");
+        }
+
+        function fill(d) {
+          var p = d;
+          while (p.depth > 1) p = p.parent;
+          var c = d3.lab(hue(p.name));
+          c.l = luminance(d.sum);
+          return c;
+        }
+
+        function arcTween(b) {
+          var i = d3.interpolate(this._current, b);
+          this._current = i(0);
+          return function(t) {
+            return arc(i(t));
+          };
+        }
+
+        function updateArc(d) {
+          return {depth: d.depth, x: d.x, dx: d.dx};
+        }
+
+        d3.select(self.frameElement).style("height", margin.top + margin.bottom + "px");
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        // var dataset = {
+        //   final: [],
+        //   inner: [10000, 7000, 3000, 3000],
+        //   outer: [3000, 4000, 4000, 4000, 1000, 7000, 1000]
+        // };
+
+        // var width = 1600,
+        //     height = 800,
+        //     cwidth = 100;
+
+        // var color = d3.scale.category20();
+
+        // var pie = d3.layout.pie()
+        //     .sort(null);
+
+        // var arc = d3.svg.arc();
+
+        // var svg = d3.select("body").append("svg")
+        //     .attr("width", width)
+        //     .attr("height", height)
+        //     .append("g")
+        //     .attr("class","wrapper")
+        //     .attr("transform", "translate(" + width / 2 + "," + height / 2 + ")")
+
+        // var gs = svg.selectAll("g.wrapper").data(d3.values(dataset)).enter()
+        //         .append("g")
+        //         .attr("id",function(d,i){
+        //             return Object.keys(dataset)[i];
+        //         });
+
+        // var gsLabels = svg.selectAll("g.wrapper").data(d3.values(dataset)).enter()
+        //         .append("g")
+        //         .attr("id",function(d,i){
+        //             return "label_" + Object.keys(dataset)[i];
+        //         });
+
+        // var count = 0;
+        // var path = gs.selectAll("path")
+        //   .data(function(d) { return pie(d); })
+        //   .enter().append("path")
+        //   .attr("fill", function(d, i) { 
+        //     console.log(i);
+        //     console.log(d);
+        //     console.log(color)
+        //     return color(i); 
+        //   })
+        //   .attr("d", function(d, i, j) { 
+        //     console.log("before: ")
+        //     console.log(d);
+        //       d._tmp = d.endAngle;
+        //       d.endAngle = d.startAngle;
+
+        //     console.log("after: ")
+        //       console.log(d);
+        //       if(Object.keys(dataset)[j] === "inner"){
+        //           d.arc = d3.svg.arc().innerRadius(0).outerRadius(cwidth*(j+1.05)); 
+        //       }
+        //       else{
+        //           d.arc = d3.svg.arc().innerRadius(10+cwidth*j).outerRadius(cwidth*(j+1.1)); 
+        //       }
+        //       return d.arc(d);
+        //       })
+        //   .transition().delay(function(d, i, j) {
+        //           return i * 500; 
+        //   }).duration(500)
+        //   .attrTween('d', function(d,x,y) {
+        //      var i = d3.interpolate(d.startAngle, d._tmp);
+        //      return function(t) {
+        //          d.endAngle = i(t);
+        //        return d.arc(d);
+        //      }
+        //   });
+
+
+
+
+
+
+
+          // var data = [
+          //     {name: "A", val: 11975},  
+          //     {name: "B", val: 5871}, 
+          //     {name: "C", val: 8916}
+          // ];
+
+          // var w = 400,
+          //     h = 400,
+          //     r = Math.min(w, h) / 2,
+          //     labelr = r + 30, // radius for label anchor
+          //     color = d3.scale.category20(),
+          //     donut = d3.layout.pie(),
+          //     arc = d3.svg.arc().innerRadius(r * .6).outerRadius(r);
+
+          // var vis = d3.select("body")
+          //   .append("svg:svg")
+          //     .data([data])
+          //     .attr("width", w + 150)
+          //     .attr("height", h);
+
+          // var arcs = vis.selectAll("g.arc")
+          //     .data(donut.value(function(d) { return d.val }))
+          //   .enter().append("svg:g")
+          //     .attr("class", "arc")
+          //     .attr("transform", "translate(" + (r + 30) + "," + r + ")");
+
+          // arcs.append("svg:path")
+          //     .attr("fill", function(d, i) { return color(i); })
+          //     .attr("d", arc);
+
+          // arcs.append("svg:text")
+          //     .attr("transform", function(d) {
+          //         var c = arc.centroid(d),
+          //             x = c[0],
+          //             y = c[1],
+          //             // pythagorean theorem for hypotenuse
+          //             h = Math.sqrt(x*x + y*y);
+          //         return "translate(" + (x/h * labelr) +  ',' +
+          //            (y/h * labelr) +  ")"; 
+          //     })
+          //     .attr("dy", ".35em")
+          //     .attr("text-anchor", function(d) {
+          //         // are we past the center?
+          //         return (d.endAngle + d.startAngle)/2 > Math.PI ?
+          //             "end" : "start";
+          //     })
+          //     .text(function(d, i) { return d.value.toFixed(2); });
+          // // http://stackoverflow.com/questions/8053424/label-outside-arc-pie-chart-d3-js
+          // // https://github.com/mbostock/d3/issues/1124
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        // var data = [
+        //   [11975,  5871, 8916, 2868],
+        //   [ 1951, 10048, 2060, 6171]
+        // ];
+
+        // var number = 0;
+
+        // // Define the margin, radius, and color scale. The color scale will be
+        // // assigned by index, but if you define your data using objects, you could pass
+        // // in a named field from the data object instead, such as `d.name`. Colors
+        // // are assigned lazily, so if you want deterministic behavior, define a domain
+        // // for the color scale.
+        // var m = 0,
+        //     r = 300,
+        //     z = d3.scale.category20c();
+
+        // // Insert an svg:svg element (with margin) for each row in our dataset. A
+        // // child svg:g element translates the origin to the pie center.
+        // var svg = d3.select("body").selectAll("svg")
+        //     .data(data)
+        //   .enter().append("svg:svg")
+        //     .attr("width", (r + m) * 2)
+        //     .attr("height", (r + m) * 2)
+        //     .attr("class", function(){
+        //       number++;
+        //       return "class" + number;
+        //     })
+        //   .append("svg:g")
+        //     .attr("transform", "translate(" + (r + m) + "," + (r + m) + ")");
+
+        // // The data for each svg:svg element is a row of numbers (an array). We pass
+        // // that to d3.layout.pie to compute the angles for each arc. These start and end
+        // // angles are passed to d3.svg.arc to draw arcs! Note that the arc radius is
+        // // specified on the arc, not the layout.
+        // svg.selectAll("path")
+        //     .data(d3.layout.pie())
+        //   .enter().append("svg:path")
+        //     .attr("d", d3.svg.arc()
+        //     .innerRadius(r / 2)
+        //     .outerRadius(r))
+        //     .style("fill", function(d, i) { return z(i); });
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        // var dataset = {
+        //   apples: [53245, 28479, 19697, 24037, 40245],
+        //   oranges: [200, 200, 200, 200] // previously 5 values, now only 4
+        // };
+
+        // var width = 1600,
+        //   height = 1000,
+        //   radius = Math.min(width, height) / 2;
+
+        // var enterAntiClockwise = {
+        //   startAngle: Math.PI * 2,
+        //   endAngle: Math.PI * 2
+        // };
+
+        // var color = d3.scale.category20();
+
+        // var pie = d3.layout.pie()
+        //   .sort(null);
+
+        // var arc = d3.svg.arc()
+        //   .innerRadius(radius - 500)
+        //   .outerRadius(radius - 20);
+
+        // var svg = d3.select("body").append("svg")
+        //   .attr("width", width)
+        //   .attr("height", height)
+        //   .append("g")
+        //   .attr("transform", "translate(" + width / 2 + "," + height / 2 + ")");
+
+        // var path = svg.selectAll("path")
+        //   .data(pie(dataset.apples))
+        //   .enter().append("path")
+        //   .attr("fill", function(d, i) { return color(i); })
+        //   .attr("d", arc)
+        //   .each(function(d) { this._current = d; }); // store the initial values
+
+        // d3.selectAll("input").on("change", change);
+
+        // var timeout = setTimeout(function() {
+        //   d3.select("input[value=\"oranges\"]").property("checked", true).each(change);
+        // }, 2000);
+
+        // function change() {
+        //   clearTimeout(timeout);
+        //   path = path.data(pie(dataset[this.value])); // update the data
+        //   // set the start and end angles to Math.PI * 2 so we can transition
+        //   // anticlockwise to the actual values later
+        //   path.enter().append("path")
+        //       .attr("fill", function (d, i) {
+        //         return color(i);
+        //       })
+        //       .attr("d", arc(enterAntiClockwise))
+        //       .each(function (d) {
+        //         this._current = {
+        //           data: d.data,
+        //           value: d.value,
+        //           startAngle: enterAntiClockwise.startAngle,
+        //           endAngle: enterAntiClockwise.endAngle
+        //         };
+        //       }); // store the initial values
+
+        //   path.exit()
+        //       .transition()
+        //       .duration(750)
+        //       .attrTween('d', arcTweenOut)
+        //       .remove() // now remove the exiting arcs
+
+        //   path.transition().duration(750).attrTween("d", arcTween); // redraw the arcs
+        // }
+
+        // // Store the displayed angles in _current.
+        // // Then, interpolate from _current to the new angles.
+        // // During the transition, _current is updated in-place by d3.interpolate.
+        // function arcTween(a) {
+        //   var i = d3.interpolate(this._current, a);
+        //   this._current = i(0);
+        //   return function(t) {
+        //   return arc(i(t));
+        //   };
+        // }
+        // // Interpolate exiting arcs start and end angles to Math.PI * 2
+        // // so that they 'exit' at the end of the data
+        // function arcTweenOut(a) {
+        //   var i = d3.interpolate(this._current, {startAngle: Math.PI * 2, endAngle: Math.PI * 2, value: 0});
+        //   this._current = i(0);
+        //   return function (t) {
+        //     return arc(i(t));
+        //   };
+        // }
+
       }
     };
   }]);
