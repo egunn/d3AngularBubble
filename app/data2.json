@@ -1,0 +1,45 @@
+{
+ "name": "flare",
+ "children": [
+  {
+   "name": "facebook",
+   "children": [
+    {"name": "organic", "size": 9000},
+    {"name": "match", "size": 2000},
+    {"name": "fundsAdded", "size": 500}
+   ]
+  },
+  {
+   "name": "youtube",
+   "children": [
+     {"name": "organic", "size": 9000},
+     {"name": "match", "size": 2000},
+     {"name": "fundsAdded", "size": 500}
+   ]
+  },
+  {
+   "name": "google",
+   "children": [
+     {"name": "organic", "size": 9000},
+     {"name": "match", "size": 2000},
+     {"name": "fundsAdded", "size": 500}
+   ]
+  },
+  {
+   "name": "email",
+   "children": [
+     {"name": "organic", "size": 9000},
+     {"name": "match", "size": 2000},
+     {"name": "fundsAdded", "size": 500}
+   ]
+  },
+  {
+   "name": "twitter",
+   "children": [
+      {"name": "organic", "size": 9000},
+      {"name": "match", "size": 2000},
+      {"name": "fundsAdded", "size": 500}
+   ]
+  }
+ ]
+}
