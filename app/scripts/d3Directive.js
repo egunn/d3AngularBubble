@@ -25,7 +25,11 @@
             .attr("width", margin.left + margin.right)
             .attr("height", margin.top + margin.bottom)
           .append("g")
-            .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+            .attr("transform", "translate(" + margin.left + "," + margin.top + ")")
+
+        svg.append("g")
+            .attr("class", "labels");
+
 
         var partition = d3.layout.partition()
             .sort(function(a, b) { return d3.ascending(a.name, b.name); })
@@ -102,7 +106,35 @@
                       }
                     })
                     .each(function(d) { this._current = updateArc(d); })
-                    .on("click", zoomIn);
+                    .on("click", zoomIn)
+
+                    var text = svg.select(".labels").selectAll("text")
+                        .data(partition.nodes(root).slice(1));
+
+                    text.enter()
+                      .append("text")
+                      .attr("dy", ".35em")
+                      .style("opacity", 0)
+                      .text(function(d) {
+                        return d.name;
+                      })
+                      .each(function(d) {
+                        this._current = d;
+                      });
+                    
+                    function midAngle(d){
+                      debugger;
+                      return d.startAngle + (d.endAngle - d.startAngle)/2;
+                    }
+
+                    text = svg.select(".labels").selectAll("text")
+                        .data(partition.nodes(root).slice(1));
+
+                    text.transition().duration(500)
+                      .style("opacity", function(d) {
+                        return d.size == 0 ? 0 : 1;
+                      })
+
             // Now redefine the value function to use the previously-computed sum.
             function zoomIn(p) {
               while(p.parent){
