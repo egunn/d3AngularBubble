@@ -4,24 +4,34 @@
     <title>Angular/D3 Integration</title>
     <link rel="stylesheet" href="//netdna.bootstrapcdn.com/bootstrap/3.0.0/css/bootstrap.min.css">
     <style>
-      .class1 {
-        position: fixed;
-        top: 50px;
-        left: 50px;
-      }
+    body {
+      font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+      width: 960px;
+      height: 500px;
+      position: relative;
+    }
+    svg{
+      width: 100%;
+      height: 100%;
+    }
+    path.slice{
+      stroke-width:2px;
+    }
 
-      .class2 {
-        position: fixed;
-        top: 50px;
-        left: 100px;
-      }
+    polyline{
+      opacity: .3;
+      stroke: black;
+      stroke-width: 2px;
+      fill: none;
+    }
     </style>
   </head>
   <body ng-app="myApp">
     <div class="container text-center">
       <form>
-        <label><input type="radio" name="dataset" value="apples" checked> Change</label>
-        <label><input type="radio" name="dataset" value="oranges"> Back</label>
+        Duration: 0<input type="range" id="duration" min="0" max="5000">5000 
+        <br>
+        <button class="randomize">randomize</button> 
       </form>
       <div class="row" ng-controller="BubbleCtrl">
         <div class="col-lg-12">
